@@ -100,15 +100,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    // Check if user exists in the 'profiles' table before trying to sign in
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('email', email)
+      .maybeSingle();
+  
+    if (checkError) {
+      console.error('Error checking user:', checkError);
+      throw checkError;
+    }
+  
+    if (!existingUser) {
+      // Custom message for unregistered users
+      throw new Error('User not registered');
+    }
+  
+    // Proceed with normal Supabase login
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-
-    if (error) throw error;
-
+  
+    if (error) {
+      // Preserve any other login error messages
+      throw error;
+    }
+  
     await logActivity('login', 'User logged in');
   };
+  
 
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
