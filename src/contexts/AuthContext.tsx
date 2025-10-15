@@ -246,16 +246,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data) {
         console.log('Password reset response:', data);
         console.log('Password reset email sent to:', email);
+        // Only log activity if a session exists; anonymous clients cannot write due to RLS
         try {
-          await supabase.from('admin_activity_logs').insert({
-            admin_id: null,
-            activity_type: 'password_reset',
-            description: `Password reset requested for: ${email}`,
-            ip_address: '',
-            user_agent: navigator.userAgent || '',
-          });
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user?.id) {
+            await supabase.from('admin_activity_logs').insert({
+              admin_id: sessionData.session.user.id,
+              activity_type: 'password_reset',
+              description: `Password reset requested for: ${email}`,
+              ip_address: '',
+              user_agent: navigator.userAgent || '',
+            });
+          }
         } catch (logError) {
-          console.error('Failed to log password reset request:', logError);
+          console.error('Skipping activity log (no session or RLS):', logError);
         }
       }
     } catch (error: any) {
@@ -293,13 +297,20 @@ export function useAuth(): AuthContextType {
 
 // Helper function to get base URL based on environment
 function getBaseUrl(): string {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  if (typeof window !== 'undefined') {
+  // Prefer runtime browser origin during client-side execution
+  if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
-  if (process.env.NODE_ENV === 'production') {
+
+  // Vite environment variables (set in .env as VITE_*)
+  const viteEnv = (import.meta as any)?.env || {};
+  const siteUrl = viteEnv.VITE_SITE_URL || viteEnv.VITE_PUBLIC_SITE_URL;
+  const vercelUrl = viteEnv.VITE_VERCEL_URL; // e.g., my-app.vercel.app
+  if (siteUrl) return String(siteUrl);
+  if (vercelUrl) return `https://${String(vercelUrl).replace(/^https?:\/\//, '')}`;
+
+  // Fallbacks
+  if ((import.meta as any)?.env?.PROD) {
     return 'https://super-admin-sigma-one.vercel.app';
   }
   return 'http://localhost:5173';
