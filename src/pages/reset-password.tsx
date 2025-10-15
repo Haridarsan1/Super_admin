@@ -12,14 +12,14 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [accessToken, setAccessToken] = useState('');
-  const { logActivity, signOut } = useAuth();
+  const { logActivity } = useAuth();
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tokenHash = urlParams.get('token_hash');
+    const type = urlParams.get('type');
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
     const accessTokenFromHash = hashParams.get('access_token');
-    const type = urlParams.get('type') || hashParams.get('type');
     const errorParam = hashParams.get('error');
     const errorDescription = hashParams.get('error_description');
 
@@ -28,13 +28,12 @@ export default function ResetPasswordPage() {
     if ((tokenHash || accessTokenFromHash) && type === 'recovery') {
       console.log('Processing token:', tokenHash || accessTokenFromHash);
       setAccessToken(tokenHash || accessTokenFromHash);
-      signOut().then(() => console.log('Session cleared for reset')).catch(err => console.error('Error clearing session:', err));
     } else if (errorParam || errorDescription) {
       setError(errorDescription || 'Invalid reset link. Please request a new password reset.');
     } else {
       setError('Invalid reset link. Please request a new password reset.');
     }
-  }, [signOut]);
+  }, []);
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,10 +95,10 @@ export default function ResetPasswordPage() {
 
   if (!accessToken && !error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full space-y-8 p-8">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
+        <div className="max-w-md w-full space-y-8 bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-2xl border border-white/20">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900">Loading...</h2>
+            <h2 className="text-2xl font-bold text-white">Loading...</h2>
           </div>
         </div>
       </div>
