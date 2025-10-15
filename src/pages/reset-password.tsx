@@ -18,10 +18,11 @@ export default function ResetPasswordPage() {
       const url = new URL(window.location.href);
       const searchParams = url.searchParams;
       const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+      const storedEmail = (() => { try { return localStorage.getItem('resetEmail') || undefined; } catch { return undefined; } })();
 
       const code = searchParams.get('code');
       const token = searchParams.get('token');
-      const email = searchParams.get('email');
+      const email = searchParams.get('email') || storedEmail || undefined;
       const tokenHash = searchParams.get('token_hash');
       const type = hashParams.get('type') || searchParams.get('type');
       const accessToken = hashParams.get('access_token');

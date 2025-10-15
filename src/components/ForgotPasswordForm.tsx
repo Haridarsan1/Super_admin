@@ -16,6 +16,8 @@ export default function ForgotPasswordForm() {
     setLoading(true);
 
     try {
+      // Persist email locally so the reset page can verify token+email if provider omits email in the URL
+      try { localStorage.setItem('resetEmail', email); } catch {}
       await resetPassword(email);
       setMessage('Password reset email sent! Check your inbox.');
       setTimeout(() => {
