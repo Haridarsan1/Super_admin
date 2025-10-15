@@ -20,17 +20,31 @@ export default function ResetPasswordPage() {
       const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
 
       const code = searchParams.get('code');
-      const tokenHash = searchParams.get('token_hash') || searchParams.get('token');
+      const token = searchParams.get('token');
+      const email = searchParams.get('email');
+      const tokenHash = searchParams.get('token_hash');
       const type = hashParams.get('type') || searchParams.get('type');
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
 
-      console.log('Reset URL params:', { code, tokenHash, accessToken, refreshToken, type });
+      console.log('Reset URL params:', { code, token, email, tokenHash, accessToken, refreshToken, type });
 
       try {
         if (code) {
           // Newer flow: exchange code for a session
           const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          window.history.replaceState({}, document.title, '/reset-password');
+          return;
+        }
+
+        if (token && email) {
+          // OTP token flow: verify with token + email
+          const { error } = await supabase.auth.verifyOtp({
+            type: 'recovery',
+            token,
+            email,
+          });
           if (error) throw error;
           window.history.replaceState({}, document.title, '/reset-password');
           return;
