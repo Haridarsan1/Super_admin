@@ -2,14 +2,13 @@
 'use client';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom'; // If using React Router, otherwise use Next.js router
+// Removed react-router-dom; using window.location for navigation
 
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const { resetPassword } = useAuth();
-  const navigate = useNavigate(); // Or use useRouter from next/navigation
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +19,7 @@ export default function ForgotPasswordForm() {
       await resetPassword(email);
       setMessage('Password reset email sent! Check your inbox.');
       setTimeout(() => {
-        navigate('/login'); // Or router.push('/login') for Next.js
+        window.location.assign('/login');
       }, 3000);
     } catch (error: any) {
       setMessage(`Error: ${error.message}`);
@@ -67,7 +66,7 @@ export default function ForgotPasswordForm() {
         <div className="text-center">
           <button
             type="button"
-            onClick={() => navigate('/login')} // Or router.push('/login')
+            onClick={() => window.location.assign('/login')}
             className="text-sm text-indigo-600 hover:text-indigo-500"
           >
             Back to Login

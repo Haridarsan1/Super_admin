@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (authError.message.includes('Invalid login credentials')) {
           throw new Error('Invalid password');
         }
-        if (authError.statusCode === 429) {
+        if ((authError as any).status === 429) {
           throw new Error('Too many requests. Please try again later.');
         }
         throw new Error(authError.message || 'Authentication failed');
