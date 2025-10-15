@@ -236,12 +236,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${baseUrl}/reset-password`,
       });
-
+  
       if (error) {
         console.error('Password reset error:', error);
         throw error;
       }
-
+  
       if (data) {
         console.log('Password reset response:', data);
         console.log('Password reset email sent to:', email);
@@ -292,14 +292,17 @@ export function useAuth(): AuthContextType {
 
 // Helper function to get base URL based on environment
 function getBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
   }
   if (process.env.NODE_ENV === 'production') {
     return 'https://super-admin-sigma-one.vercel.app';
   }
   return 'http://localhost:5173';
 }
+
+// Add debug log (optional, remove in production if not needed)
+console.log('Resolved base URL:', getBaseUrl());
