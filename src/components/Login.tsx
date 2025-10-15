@@ -1,3 +1,4 @@
+// src/components/Login.tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Chrome } from 'lucide-react';
@@ -11,9 +12,9 @@ export default function Login({ onSwitchToSignUp }: LoginProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [showResetForm, setShowResetForm] = useState(false); // New state to toggle reset form
 
   const { signIn, signInWithGoogle, resetPassword } = useAuth();
 
@@ -47,81 +48,25 @@ export default function Login({ onSwitchToSignUp }: LoginProps) {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setResetSuccess(false);
+
+    if (!resetEmail) {
+      setError('Please enter an email address');
+      setLoading(false);
+      return;
+    }
 
     try {
       await resetPassword(resetEmail);
       setResetSuccess(true);
+      setResetEmail(''); // Clear the email field after success
+      setShowResetForm(false); // Hide the form after success
     } catch (err: any) {
       setError(err.message || 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
   };
-
-  if (showForgotPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
-        <div className="max-w-md w-full space-y-8 bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-2xl border border-white/20">
-          <div>
-            <h2 className="text-3xl font-bold text-white text-center">Reset Password</h2>
-            <p className="mt-2 text-sm text-slate-300 text-center">
-              Enter your email to receive a password reset link
-            </p>
-          </div>
-
-          {resetSuccess ? (
-            <div className="bg-green-500/20 border border-green-500/50 text-green-100 px-4 py-3 rounded-lg">
-              Password reset email sent! Check your inbox.
-            </div>
-          ) : (
-            <form onSubmit={handleResetPassword} className="mt-8 space-y-6">
-              {error && (
-                <div className="bg-red-500/20 border border-red-500/50 text-red-100 px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="reset-email" className="sr-only">Email address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-                  <input
-                    id="reset-email"
-                    type="email"
-                    required
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Email address"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Sending...' : 'Send Reset Link'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForgotPassword(false);
-                  setResetSuccess(false);
-                  setError('');
-                }}
-                className="w-full text-sm text-slate-300 hover:text-white transition-colors"
-              >
-                Back to login
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
@@ -204,7 +149,7 @@ export default function Login({ onSwitchToSignUp }: LoginProps) {
           <div className="flex items-center justify-between text-sm">
             <button
               type="button"
-              onClick={() => setShowForgotPassword(true)}
+              onClick={() => setShowResetForm(true)}
               className="text-blue-400 hover:text-blue-300 transition-colors"
             >
               Forgot password?
@@ -218,6 +163,64 @@ export default function Login({ onSwitchToSignUp }: LoginProps) {
             </button>
           </div>
         </form>
+
+        {showResetForm && (
+          <form onSubmit={handleResetPassword} className="mt-4 space-y-4">
+            {resetSuccess ? (
+              <div className="bg-green-500/20 border border-green-500/50 text-green-100 px-4 py-3 rounded-lg text-sm text-center">
+                Password reset email sent! Check your inbox and follow the link to reset your password.
+              </div>
+            ) : (
+              <>
+                {error && (
+                  <div className="bg-red-500/20 border border-red-500/50 text-red-100 px-4 py-3 rounded-lg text-sm text-center">
+                    {error}
+                  </div>
+                )}
+                <div>
+                  <label htmlFor="reset-email" className="sr-only">Email address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                    <input
+                      id="reset-email"
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Sending...' : 'Send Reset Link'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetForm(false);
+                    setResetSuccess(false);
+                    setError('');
+                    setResetEmail('');
+                  }}
+                  className="w-full text-sm text-slate-300 hover:text-white transition-colors"
+                >
+                  Back to Login
+                </button>
+              </>
+            )}
+          </form>
+        )}
+
+        {resetSuccess && !showResetForm && (
+          <div className="bg-green-500/20 border border-green-500/50 text-green-100 px-4 py-3 rounded-lg text-sm text-center">
+            Password reset email sent! Check your inbox and follow the link to reset your password.
+          </div>
+        )}
       </div>
     </div>
   );

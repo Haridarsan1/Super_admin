@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -62,14 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initial session load
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
         setUser(session?.user ?? null);
-        
         if (session?.user) {
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
@@ -82,17 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     };
-
     initializeAuth();
   }, []);
 
-  // Auth state subscription
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        console.log('Auth state changed:', { event: _event, session }); // Added debug log
         try {
           setUser(session?.user ?? null);
-          
           if (session?.user) {
             const profileData = await fetchProfile(session.user.id);
             setProfile(profileData);
@@ -105,10 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     );
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string): Promise<void> => {
@@ -116,33 +109,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+        options: { data: { full_name: fullName } },
       });
-
-      if (error) {
-        console.error('Sign up error:', error);
-        throw new Error(error.message || 'Sign up failed');
-      }
-
+      if (error) throw error;
       if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email,
-            full_name: fullName,
-            role: 'admin',
-          });
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-          throw new Error('Profile creation failed');
-        }
-
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          email,
+          full_name: fullName,
+          role: 'admin',
+        });
         await logActivity('action', `New admin account created: ${email}`);
       }
     } catch (error: any) {
@@ -153,9 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string): Promise<void> => {
     try {
-      // Step 1: Check if user exists in profiles table BEFORE authentication
       console.log('🔍 Checking if user exists in database with email:', email);
-      
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, email, role')
@@ -164,8 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profileError) {
         console.error('Profile lookup error:', profileError);
-        if (profileError.message.includes('new row violates row-level security policy') || 
-            profileError.code === '42501') {
+        if (profileError.message.includes('new row violates row-level security policy')) {
           throw new Error('Database access denied');
         }
         throw new Error('Database error occurred');
@@ -177,14 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('✅ User found in database:', profile.email, 'Role:', profile.role);
-
-      // Step 2: Check if user has admin privileges
       if (!['admin', 'superadmin'].includes(profile.role)) {
         console.log('❌ User lacks admin privileges:', profile.role);
         throw new Error('Access denied. Admin privileges required.');
       }
 
-      // Step 3: Now attempt authentication with password
       console.log('🔑 Attempting authentication for:', email);
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -202,58 +172,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(authError.message || 'Authentication failed');
       }
 
-      if (!authData.user) {
-        throw new Error('Authentication failed - no user data returned');
-      }
-
-      // Step 4: Verify the authenticated user matches the profile
+      if (!authData.user) throw new Error('Authentication failed - no user data returned');
       if (authData.user.email !== profile.email) {
-        console.error('Email mismatch between auth and profile');
         await supabase.auth.signOut();
         throw new Error('Authentication verification failed');
       }
 
-      // Step 5: Fetch complete profile and set state
       const profileData = await fetchProfile(authData.user.id);
-      
       if (!profileData) {
-        console.error('Complete profile fetch failed after auth');
         await supabase.auth.signOut();
         throw new Error('Profile load failed');
       }
 
       setProfile(profileData);
       await logActivity('login', `Admin ${email} logged in successfully`);
-      
       console.log('✅ Login successful for:', email);
-      
     } catch (error: any) {
       console.error('Sign in error:', error);
-      
-      // Clean up any partial authentication session
       try {
         await supabase.auth.signOut();
       } catch (signOutError) {
         console.error('Error cleaning up session:', signOutError);
       }
-      
       throw new Error(error.message || 'Sign in failed');
     }
   };
 
   const signInWithGoogle = async (): Promise<void> => {
     try {
+      const baseUrl = getBaseUrl();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${baseUrl}/auth/callback`,
         },
       });
-
-      if (error) {
-        console.error('Google sign in error:', error);
-        throw error;
-      }
+      if (error) throw error;
     } catch (error: any) {
       console.error('Google OAuth error:', error);
       throw new Error(error.message || 'Google sign in failed');
@@ -277,8 +231,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string): Promise<void> => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const baseUrl = getBaseUrl();
+      console.log('Attempting password reset for email:', email, 'with redirectTo:', `${baseUrl}/reset-password`);
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${baseUrl}/reset-password`,
       });
 
       if (error) {
@@ -286,7 +242,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      await logActivity('password_reset', `Password reset requested for: ${email}`);
+      if (data) {
+        console.log('Password reset response:', data);
+        console.log('Password reset email sent to:', email);
+        try {
+          await supabase.from('admin_activity_logs').insert({
+            admin_id: null,
+            activity_type: 'password_reset',
+            description: `Password reset requested for: ${email}`,
+            ip_address: '',
+            user_agent: navigator.userAgent || '',
+          });
+        } catch (logError) {
+          console.error('Failed to log password reset request:', logError);
+        }
+      }
     } catch (error: any) {
       console.error('Password reset process error:', error);
       throw new Error(error.message || 'Password reset failed');
@@ -318,4 +288,18 @@ export function useAuth(): AuthContextType {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+}
+
+// Helper function to get base URL based on environment
+function getBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://super-admin-sigma-one.vercel.app';
+  }
+  return 'http://localhost:5173';
 }

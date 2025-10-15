@@ -1,13 +1,26 @@
-import { useState } from 'react';
+// src/App.tsx
+import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import ResetPasswordPage from './pages/reset-password';
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
-  const [showLogin, setShowLogin] = useState(true);
+  const [page, setPage] = useState<'login' | 'signup'>('login');
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/reset-password') {
+      // Do not set page state for reset path
+    } else if (path === '/signup') {
+      setPage('signup');
+    } else {
+      setPage('login');
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -17,19 +30,20 @@ function AppContent() {
     );
   }
 
+  const path = window.location.pathname;
+  if (path === '/reset-password') {
+    return <ResetPasswordPage />;
+  }
+
   if (!user || !profile) {
-    return showLogin ? (
-      <Login onSwitchToSignUp={() => setShowLogin(false)} />
+    return page === 'login' ? (
+      <Login onSwitchToSignUp={() => setPage('signup')} />
     ) : (
-      <SignUp onSwitchToLogin={() => setShowLogin(true)} />
+      <SignUp onSwitchToLogin={() => setPage('login')} />
     );
   }
 
-  return profile.role === 'superadmin' ? (
-    <SuperAdminDashboard />
-  ) : (
-    <AdminDashboard />
-  );
+  return profile.role === 'superadmin' ? <SuperAdminDashboard /> : <AdminDashboard />;
 }
 
 function App() {
