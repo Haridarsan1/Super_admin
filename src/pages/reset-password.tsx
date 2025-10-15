@@ -12,29 +12,48 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const { logActivity } = useAuth();
 
-  // ✅ Load token from URL hash and set Supabase session
+  // ✅ Load token from URL and set Supabase session (supports #access_token and ?code)
   useEffect(() => {
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.replace('#', '?'));
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const type = params.get('type');
+    const handleRecovery = async () => {
+      const url = new URL(window.location.href);
+      const searchParams = url.searchParams;
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
 
-    console.log('Reset URL params:', { accessToken, refreshToken, type });
+      const code = searchParams.get('code');
+      const type = hashParams.get('type') || searchParams.get('type');
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
 
-    if (type === 'recovery' && accessToken && refreshToken) {
-      // ✅ Establish Supabase session using the tokens
-      supabase.auth
-        .setSession({ access_token: accessToken, refresh_token: refreshToken })
-        .then(({ error }) => {
-          if (error) {
-            console.error('Session error:', error);
-            setError('Invalid or expired reset link. Please request a new password reset.');
-          }
-        });
-    } else {
-      setError('Invalid reset link. Please request a new password reset.');
-    }
+      console.log('Reset URL params:', { code, accessToken, refreshToken, type });
+
+      try {
+        if (code) {
+          // Newer flow: exchange code for a session
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          window.history.replaceState({}, document.title, '/reset-password');
+          return;
+        }
+
+        if (type === 'recovery' && accessToken && refreshToken) {
+          // Legacy/hash flow: set session from tokens
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) throw error;
+          window.history.replaceState({}, document.title, '/reset-password');
+          return;
+        }
+
+        setError('Invalid reset link. Please request a new password reset.');
+      } catch (err) {
+        console.error('Session error:', err);
+        setError('Invalid or expired reset link. Please request a new password reset.');
+      }
+    };
+
+    handleRecovery();
   }, []);
 
   const handlePasswordReset = async (e: React.FormEvent) => {
