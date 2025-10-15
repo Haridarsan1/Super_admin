@@ -234,7 +234,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const baseUrl = getBaseUrl();
       console.log('Attempting password reset for email:', email, 'with redirectTo:', `${baseUrl}/reset-password`);
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${baseUrl}/reset-password`,
+        // Include email in redirect so the reset page can verify OTP when using token flow
+        redirectTo: `${baseUrl}/reset-password?email=${encodeURIComponent(email)}`,
       });
   
       if (error) {
