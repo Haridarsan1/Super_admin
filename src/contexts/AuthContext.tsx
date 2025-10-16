@@ -3,18 +3,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
-
-interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  logActivity: (activityType: string, description: string) => Promise<void>;
-}
+import { AuthContextType } from '../auth/types';
+import { AuthService, SignInService, SignUpService, ResetPasswordService, SignOutService } from '../auth/services';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -24,22 +14,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-      return data || null;
-    } catch (error) {
-      console.error('Error in fetchProfile:', error);
-      return null;
-    }
+    return AuthService.fetchProfile(userId);
   };
 
   const logActivity = async (activityType: string, description: string): Promise<void> => {
@@ -48,19 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    try {
-      await supabase
-        .from('admin_activity_logs')
-        .insert({
-          admin_id: user.id,
-          activity_type: activityType,
-          description,
-          ip_address: '',
-          user_agent: navigator.userAgent || '',
-        });
-    } catch (error) {
-      console.error('Error logging activity:', error);
-    }
+    await AuthService.logActivity(user.id, activityType, description);
   };
 
   useEffect(() => {
@@ -105,166 +68,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string): Promise<void> => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } },
-      });
-      if (error) throw error;
-      if (data.user) {
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          role: 'admin',
-        });
-        await logActivity('action', `New admin account created: ${email}`);
-      }
-    } catch (error: any) {
-      console.error('Sign up process error:', error);
-      throw error;
+    const response = await SignUpService.signUp(email, password, fullName);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Sign up failed');
     }
   };
 
   const signIn = async (email: string, password: string): Promise<void> => {
-    try {
-      console.log('🔍 Checking if user exists in database with email:', email);
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email, role')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Profile lookup error:', profileError);
-        if (profileError.message.includes('new row violates row-level security policy')) {
-          throw new Error('Database access denied');
-        }
-        throw new Error('Database error occurred');
-      }
-
-      if (!profile) {
-        console.log('❌ User not found in database:', email);
-        throw new Error('User is not registered');
-      }
-
-      console.log('✅ User found in database:', profile.email, 'Role:', profile.role);
-      if (!['admin', 'superadmin'].includes(profile.role)) {
-        console.log('❌ User lacks admin privileges:', profile.role);
-        throw new Error('Access denied. Admin privileges required.');
-      }
-
-      console.log('🔑 Attempting authentication for:', email);
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        console.error('Authentication error:', authError);
-        if (authError.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid password');
-        }
-        if ((authError as any).status === 429) {
-          throw new Error('Too many requests. Please try again later.');
-        }
-        throw new Error(authError.message || 'Authentication failed');
-      }
-
-      if (!authData.user) throw new Error('Authentication failed - no user data returned');
-      if (authData.user.email !== profile.email) {
-        await supabase.auth.signOut();
-        throw new Error('Authentication verification failed');
-      }
-
-      const profileData = await fetchProfile(authData.user.id);
-      if (!profileData) {
-        await supabase.auth.signOut();
-        throw new Error('Profile load failed');
-      }
-
-      setProfile(profileData);
-      await logActivity('login', `Admin ${email} logged in successfully`);
-      console.log('✅ Login successful for:', email);
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      try {
-        await supabase.auth.signOut();
-      } catch (signOutError) {
-        console.error('Error cleaning up session:', signOutError);
-      }
-      throw new Error(error.message || 'Sign in failed');
+    const response = await SignInService.signIn(email, password);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Sign in failed');
+    }
+    if (response.data) {
+      setProfile(response.data.profile);
     }
   };
 
   const signInWithGoogle = async (): Promise<void> => {
-    try {
-      const baseUrl = getBaseUrl();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${baseUrl}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      console.error('Google OAuth error:', error);
-      throw new Error(error.message || 'Google sign in failed');
+    const response = await SignInService.signInWithGoogle();
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Google sign in failed');
     }
   };
 
   const signOut = async (): Promise<void> => {
-    try {
-      await logActivity('logout', `Admin ${user?.email || 'unknown'} logged out`);
-      await supabase.auth.signOut();
-    } catch (error: any) {
-      console.error('Sign out error:', error);
-      try {
-        await supabase.auth.signOut();
-      } catch (signOutError) {
-        console.error('Critical sign out error:', signOutError);
-        throw new Error('Sign out failed');
-      }
+    const response = await SignOutService.signOut(user?.email);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Sign out failed');
     }
   };
 
   const resetPassword = async (email: string): Promise<void> => {
-    try {
-      const baseUrl = getBaseUrl();
-      console.log('Attempting password reset for email:', email, 'with redirectTo:', `${baseUrl}/reset-password`);
-      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        // Include email in redirect so the reset page can verify OTP when using token flow
-        redirectTo: `${baseUrl}/reset-password?email=${encodeURIComponent(email)}`,
-      });
-  
-      if (error) {
-        console.error('Password reset error:', error);
-        throw error;
-      }
-  
-      if (data) {
-        console.log('Password reset response:', data);
-        console.log('Password reset email sent to:', email);
-        // Only log activity if a session exists; anonymous clients cannot write due to RLS
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user?.id) {
-            await supabase.from('admin_activity_logs').insert({
-              admin_id: sessionData.session.user.id,
-              activity_type: 'password_reset',
-              description: `Password reset requested for: ${email}`,
-              ip_address: '',
-              user_agent: navigator.userAgent || '',
-            });
-          }
-        } catch (logError) {
-          console.error('Skipping activity log (no session or RLS):', logError);
-        }
-      }
-    } catch (error: any) {
-      console.error('Password reset process error:', error);
-      throw new Error(error.message || 'Password reset failed');
+    const response = await ResetPasswordService.resetPassword(email);
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Password reset failed');
     }
   };
 
@@ -295,26 +132,5 @@ export function useAuth(): AuthContextType {
   return context;
 }
 
-// Helper function to get base URL based on environment
-function getBaseUrl(): string {
-  // Prefer runtime browser origin during client-side execution
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
-  }
-
-  // Vite environment variables (set in .env as VITE_*)
-  const viteEnv = (import.meta as any)?.env || {};
-  const siteUrl = viteEnv.VITE_SITE_URL || viteEnv.VITE_PUBLIC_SITE_URL;
-  const vercelUrl = viteEnv.VITE_VERCEL_URL; // e.g., my-app.vercel.app
-  if (siteUrl) return String(siteUrl);
-  if (vercelUrl) return `https://${String(vercelUrl).replace(/^https?:\/\//, '')}`;
-
-  // Fallbacks
-  if ((import.meta as any)?.env?.PROD) {
-    return 'https://super-admin-sigma-one.vercel.app';
-  }
-  return 'http://localhost:5173';
-}
-
 // Add debug log (optional, remove in production if not needed)
-console.log('Resolved base URL:', getBaseUrl());
+console.log('Resolved base URL:', AuthService.getBaseUrl());

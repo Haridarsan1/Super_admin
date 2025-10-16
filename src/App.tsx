@@ -1,26 +1,13 @@
 // src/App.tsx
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Login from './components/Login';
-import SignUp from './components/SignUp';
+import AuthPage from './components/AuthPage';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import AdminDashboard from './components/AdminDashboard';
-import ResetPasswordPage from './pages/reset-password';
+import { NewPasswordForm } from './auth';
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
-  const [page, setPage] = useState<'login' | 'signup'>('login');
-
-  useEffect(() => {
-    const path = window.location.pathname;
-    if (path === '/reset-password') {
-      // Do not set page state for reset path
-    } else if (path === '/signup') {
-      setPage('signup');
-    } else {
-      setPage('login');
-    }
-  }, []);
 
   if (loading) {
     return (
@@ -32,15 +19,21 @@ function AppContent() {
 
   const path = window.location.pathname;
   if (path === '/reset-password') {
-    return <ResetPasswordPage />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
+        <div className="max-w-md w-full space-y-8 bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-2xl border border-white/20">
+          <div>
+            <h2 className="text-3xl font-bold text-white text-center">Reset Password</h2>
+            <p className="mt-2 text-sm text-slate-300 text-center">Enter your new password</p>
+          </div>
+          <NewPasswordForm />
+        </div>
+      </div>
+    );
   }
 
   if (!user || !profile) {
-    return page === 'login' ? (
-      <Login onSwitchToSignUp={() => setPage('signup')} />
-    ) : (
-      <SignUp onSwitchToLogin={() => setPage('login')} />
-    );
+    return <AuthPage />;
   }
 
   return profile.role === 'superadmin' ? <SuperAdminDashboard /> : <AdminDashboard />;
